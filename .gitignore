@@ -41,5 +41,6 @@ captures/
 # Keystore files
 
 .idea/
+repo/
 
 .DS_Store

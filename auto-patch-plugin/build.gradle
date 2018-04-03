@@ -1,4 +1,5 @@
 apply plugin: 'groovy'
+apply plugin: 'maven'
 compileGroovy {
     sourceCompatibility = 1.7
     targetCompatibility = 1.7
@@ -12,4 +13,18 @@ dependencies {
 //    compile 'com.meituan.robust:autopatchbase:' + VERSION_NAME
     compile project(':autopatchbase')
 }
-apply from: '../gradle_mvn_push.gradle'
+//apply from: '../gradle_mvn_push.gradle'
+
+repositories {
+    mavenCentral()
+}
+group = "com.meituan.robust"
+version = '0.4.78.1'
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            repository(url: uri('../repo'))
+        }
+    }
+}
