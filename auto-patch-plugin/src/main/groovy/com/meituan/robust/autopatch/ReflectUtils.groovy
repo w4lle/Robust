@@ -452,6 +452,7 @@ class ReflectUtils {
         return (modifiers & AccessFlag.STATIC) != 0;
     }
 
+    @Deprecated
     def static String invokeSuperString(MethodCall m) {
         StringBuilder stringBuilder = new StringBuilder();
 
@@ -460,11 +461,9 @@ class ReflectUtils {
             stringBuilder.append("\$_=(\$r)");
         }
         if (m.method.parameterTypes.length > 0) {
-            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(" + null + "," + Constants.ORIGINCLASS + ",\$\$);");
-//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ",\$\$);");
+            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ",\$\$);");
         } else {
             stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ");");
-//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ");");
         }
 
         stringBuilder.append("}");
@@ -481,18 +480,16 @@ class ReflectUtils {
         }
         if (m.method.parameterTypes.length > 0) {
             if (!originClass.isEmpty()) {
-                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(" + null + "," + originClass + ",\$\$);");
+                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null," + originClass + ",\$\$);");
             } else {
-                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(" + this + "," + Constants.ORIGINCLASS + ",\$\$);");
+                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ",\$\$);");
             }
-//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ",\$\$);");
         } else {
             if (!originClass.isEmpty()) {
                 stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null," + originClass + ");");
             } else {
                 stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ");");
             }
-//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ");");
         }
 
         stringBuilder.append("}");
@@ -544,4 +541,27 @@ class ReflectUtils {
     private static String getCoutNumber() {
         return " No:  " + ++invokeCount;
     }
+
+    public static Object readField(Object object, String fieldName) {
+        def field = null
+        def clazz = object.class;
+        while (clazz != null) {
+            try {
+                field = clazz.getDeclaredField(fieldName);
+                if (field != null) {
+                    field.setAccessible(true);
+                    break;
+                }
+                return field;
+            } catch (final NoSuchFieldException e) {
+                // ignore
+            }
+            clazz = clazz.superclass;
+        }
+        if (field != null) {
+            return field.get(object);
+        }
+        return null;
+    }
+
 }

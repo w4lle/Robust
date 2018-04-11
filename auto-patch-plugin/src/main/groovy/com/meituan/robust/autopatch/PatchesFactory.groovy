@@ -6,7 +6,6 @@ import javassist.CannotCompileException
 import javassist.CtClass
 import javassist.bytecode.AccessFlag
 import javassist.bytecode.ClassFile
-import com.meituan.robust.utils.EnhancedRobustUtils
 import javassist.*
 import javassist.bytecode.LocalVariableAttribute
 import javassist.bytecode.MethodInfo
@@ -118,13 +117,15 @@ class PatchesFactory {
 
                             @Override
                             void edit(Cast c) throws CannotCompileException {
-                                //inner class in the patched class ,not all inner class
-                                if (Config.newlyAddedClassNameList.contains(c.getEnclosingClass().getName()) || Config.noNeedReflectClassSet.contains(c.getEnclosingClass().getName())) {
-                                    return;
-                                }
-//                                def isStatic = ReflectUtils.isStatic(c.thisMethod.getAccessFlags());
-                                boolean isStatic = EnhancedRobustUtils.invokeReflectMethod("withinStatic", c, null, null, Expr.class)
+                                MethodInfo thisMethod = ReflectUtils.readField(c, "thisMethod");
+                                CtClass thisClass = ReflectUtils.readField(c, "thisClass");
+
+                                def isStatic = ReflectUtils.isStatic(thisMethod.getAccessFlags());
                                 if (!isStatic) {
+                                    //inner class in the patched class ,not all inner class
+                                    if (Config.newlyAddedClassNameList.contains(thisClass.getName()) || Config.noNeedReflectClassSet.contains(thisClass.getName())) {
+                                        return;
+                                    }
                                     // static函数是没有this指令的，直接会报错。
                                     c.replace(ReflectUtils.getCastString(c, temPatchClass))
                                 }
@@ -144,23 +145,49 @@ class PatchesFactory {
                                 }
                                 try {
                                     if (!repalceInlineMethod(m, method, false)) {
-                                        MethodInfo methodInfo = method.getMethodInfo();
-                                        LocalVariableAttribute table = methodInfo.getCodeAttribute().getAttribute(LocalVariableAttribute.tag);
-                                        String variableName = "";
-                                        int numberOfLocalVariables = table.tableLength();
-                                        if (numberOfLocalVariables > 0) {
-                                            int frameWithNameAtConstantPool = table.nameIndex(0);
-                                           variableName = methodInfo.getConstPool().getUtf8Info(frameWithNameAtConstantPool)
-                                        }
+
                                         Map memberMappingInfo = getClassMappingInfo(m.getMethod().getDeclaringClass().getName());
                                         if (invokeSuperMethodList.contains(m.getMethod())) {
-//                                        if (m.isSuper()) {
-                                            if (ReflectUtils.isStatic(method.getModifiers()) && !variableName.isEmpty()) {
-                                                m.replace(ReflectUtils.invokeSuperString(m, variableName));
-                                                return
+                                            /*
+                                            原来只判断 invokeSuperMethodList.contains(m.getMethod()) 为true就执行invokeSuperString是有bug的。
+                                            CtMethod的hashcode用getStringRep()实现，等于只有根据函数名做匹配
+
+                                            碰到这么一个情况，如下所示的修复代码
+
+                                            @Modify
+                                            @Override
+                                            public void onBackPressed() {
+                                                if (mDispatchTouchEventHook != null && mDispatchTouchEventHook.onBackPressed()) {
+                                                    return;
+                                                }
+                                                postFeedPosition();
+                                                checkTaskRoot();
+                                                super.onBackPressed();
                                             }
-                                            m.replace(ReflectUtils.invokeSuperString(m));
-                                            return;
+
+                                            mDispatchTouchEventHook的onBackPressed()方法也被判定为调用super方法了。
+                                            然而activity的onBackPressed()是返回值是void，
+                                            mDispatchTouchEventHook的onBackPressed()方法返回值是boolean，直接导致打不出patch
+
+                                            即便能打出patch，把这里针对mDispatchTouchEventHook的调用换成super调用也容易触发其他的bug
+                                             */
+                                            int index = invokeSuperMethodList.indexOf(m.getMethod());
+                                            CtMethod superMethod = invokeSuperMethodList.get(index);
+                                            if (superMethod.getLongName() != null && superMethod.getLongName() == m.getMethod().getLongName()) {
+                                                String firstVariable = "";
+                                                if (ReflectUtils.isStatic(method.getModifiers())) {
+                                                    //修复static 方法中含有super的问题，比如Aspectj处理后的方法
+                                                    MethodInfo methodInfo = method.getMethodInfo();
+                                                    LocalVariableAttribute table = methodInfo.getCodeAttribute().getAttribute(LocalVariableAttribute.tag);
+                                                    int numberOfLocalVariables = table.tableLength();
+                                                    if (numberOfLocalVariables > 0) {
+                                                        int frameWithNameAtConstantPool = table.nameIndex(0);
+                                                        firstVariable = methodInfo.getConstPool().getUtf8Info(frameWithNameAtConstantPool)
+                                                    }
+                                                }
+                                                m.replace(ReflectUtils.invokeSuperString(m, firstVariable));
+                                                return;
+                                            }
                                         }
                                         m.replace(ReflectUtils.getMethodCallString(m, memberMappingInfo, temPatchClass, ReflectUtils.isStatic(method.getModifiers()), isInline));
                                     }
