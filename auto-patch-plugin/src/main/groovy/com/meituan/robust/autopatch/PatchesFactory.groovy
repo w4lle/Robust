@@ -2,9 +2,14 @@ package com.meituan.robust.autopatch
 
 import com.meituan.robust.Constants
 import com.meituan.robust.utils.JavaUtils
-import javassist.*
+import javassist.CannotCompileException
+import javassist.CtClass
 import javassist.bytecode.AccessFlag
 import javassist.bytecode.ClassFile
+import com.meituan.robust.utils.EnhancedRobustUtils
+import javassist.*
+import javassist.bytecode.LocalVariableAttribute
+import javassist.bytecode.MethodInfo
 import javassist.expr.*
 
 import static com.meituan.robust.utils.JavaUtils.printList
@@ -114,10 +119,11 @@ class PatchesFactory {
                             @Override
                             void edit(Cast c) throws CannotCompileException {
                                 //inner class in the patched class ,not all inner class
-                                if (Config.newlyAddedClassNameList.contains(c.thisClass.getName()) || Config.noNeedReflectClassSet.contains(c.thisClass.getName())) {
+                                if (Config.newlyAddedClassNameList.contains(c.getEnclosingClass().getName()) || Config.noNeedReflectClassSet.contains(c.getEnclosingClass().getName())) {
                                     return;
                                 }
-                                def isStatic = ReflectUtils.isStatic(c.thisMethod.getAccessFlags());
+//                                def isStatic = ReflectUtils.isStatic(c.thisMethod.getAccessFlags());
+                                boolean isStatic = EnhancedRobustUtils.invokeReflectMethod("withinStatic", c, null, null, Expr.class)
                                 if (!isStatic) {
                                     // static函数是没有this指令的，直接会报错。
                                     c.replace(ReflectUtils.getCastString(c, temPatchClass))
@@ -138,9 +144,21 @@ class PatchesFactory {
                                 }
                                 try {
                                     if (!repalceInlineMethod(m, method, false)) {
+                                        MethodInfo methodInfo = method.getMethodInfo();
+                                        LocalVariableAttribute table = methodInfo.getCodeAttribute().getAttribute(LocalVariableAttribute.tag);
+                                        String variableName = "";
+                                        int numberOfLocalVariables = table.tableLength();
+                                        if (numberOfLocalVariables > 0) {
+                                            int frameWithNameAtConstantPool = table.nameIndex(0);
+                                           variableName = methodInfo.getConstPool().getUtf8Info(frameWithNameAtConstantPool)
+                                        }
                                         Map memberMappingInfo = getClassMappingInfo(m.getMethod().getDeclaringClass().getName());
                                         if (invokeSuperMethodList.contains(m.getMethod())) {
 //                                        if (m.isSuper()) {
+                                            if (ReflectUtils.isStatic(method.getModifiers()) && !variableName.isEmpty()) {
+                                                m.replace(ReflectUtils.invokeSuperString(m, variableName));
+                                                return
+                                            }
                                             m.replace(ReflectUtils.invokeSuperString(m));
                                             return;
                                         }

@@ -460,9 +460,39 @@ class ReflectUtils {
             stringBuilder.append("\$_=(\$r)");
         }
         if (m.method.parameterTypes.length > 0) {
-            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ",\$\$);");
+            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(" + null + "," + Constants.ORIGINCLASS + ",\$\$);");
+//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ",\$\$);");
         } else {
             stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ");");
+//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ");");
+        }
+
+        stringBuilder.append("}");
+//        println("invokeSuperString  " + m.methodName + "   " + stringBuilder.toString())
+        return stringBuilder.toString();
+    }
+
+    def static String invokeSuperString(MethodCall m, String originClass) {
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append("{");
+        if (!m.method.returnType.equals(CtClass.voidType)) {
+            stringBuilder.append("\$_=(\$r)");
+        }
+        if (m.method.parameterTypes.length > 0) {
+            if (!originClass.isEmpty()) {
+                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(" + null + "," + originClass + ",\$\$);");
+            } else {
+                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(" + this + "," + Constants.ORIGINCLASS + ",\$\$);");
+            }
+//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ",\$\$);");
+        } else {
+            if (!originClass.isEmpty()) {
+                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null," + originClass + ");");
+            } else {
+                stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(this," + Constants.ORIGINCLASS + ");");
+            }
+//            stringBuilder.append(getStaticSuperMethodName(m.methodName) + "(null, null" + ");");
         }
 
         stringBuilder.append("}");
